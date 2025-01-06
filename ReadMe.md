@@ -2,8 +2,14 @@
 
 ## Setup Instructions
 
+
+
 1. Install dependencies by running:
+!! fix later!!
+
+```shell
 `python setup.py`
+```
 
 2. stuff about the local models
 
@@ -11,9 +17,11 @@
 
 ## Running the model
 
-Run using:
+***Change to directory***, then Run using:
 
+```shell
 python -m src your/image/path --model modelname
+```
 
 Available models:
 
@@ -22,4 +30,7 @@ Available models:
 - chatgpt
 
 Example:
-python -m src images/meme.jpg --model chatgpt
+
+```shell
+ python -m src images/meme.jpg --model chatgpt
+ ```
