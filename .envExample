@@ -1,0 +1,8 @@
+# OpenAI API Key for ChatGPT handler
+OPENAI_API_KEY=
+
+# Anthropic API Key for Claude handler
+ANTHROPIC_API_KEY=
+
+# Qwen API Key (if required)
+QWEN_API_KEY=
