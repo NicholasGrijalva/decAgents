@@ -11,13 +11,15 @@
 
 ## Running the model
 
-1. Run using:
+Run using:
 
-`python main.py your/image/path modelname`
+python -m src your/image/path --model modelname
 
-- where the first argument is the path to your selected image
-- the modelname is:
-  - qwen
-  - anthropic
-  - chatgpt
-- this tool defaults to quen
+Available models:
+
+- qwen (default)
+- anthropic
+- chatgpt
+
+Example:
+python -m src images/meme.jpg --model chatgpt

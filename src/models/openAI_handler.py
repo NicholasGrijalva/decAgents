@@ -1,5 +1,6 @@
 from .base_handler import BaseModelHandler
 from openai import OpenAI
+from ..prompt import humor_prompt
 
 class ChatGPTHandler(BaseModelHandler):
     def process_image(self, image_path: str):
@@ -11,7 +12,7 @@ class ChatGPTHandler(BaseModelHandler):
                 messages=[{
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "Analyze this image for humor"},
+                        {"type": "text", "text": humor_prompt},
                         {"type": "image_url", "image_url": {"url": img.read()}}
                     ]
                 }]

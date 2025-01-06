@@ -37,11 +37,6 @@ processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-7B-Instruct")
 ### setting up text prompt as string to pass to prompt.
 
 
-def txt_to_message(path_to_text: str): #! should probably just hardcode lol.
-    with open(path_to_text, 'r') as file:
-        text = file.read()
-        return text
-
 def create_image_message(image_path: str, prompt: str):
     """
     Creates a message structure for image processing with a custom image path.
