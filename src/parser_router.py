@@ -1,8 +1,9 @@
 from pathlib import Path
 
 def get_model_handler(model_name: str):
-    """Dynamically import and return the appropriate model handler"""
+    #dynamically choose which agent to use 
     if model_name.lower() == 'qwen':
+        #note: importing QwenHandler loads shards. be mindful and don't call unles necessary
         from .models.qwen_handler import QwenHandler
         return QwenHandler()
     elif model_name.lower() == 'anthropic':
@@ -16,7 +17,11 @@ def get_model_handler(model_name: str):
 
 def main(image_path: str, model_name: str):
     # Convert to absolute path if relative path is provided
-    image_path = str(Path(image_path).absolute())
+    absolute_path = (Path(image_path).absolute())
+    image_path = str(absolute_path)
+
+    if not absolute_path.exists():
+        raise FileNotFoundError(f"Image not found at path: {image_path}")
     
     # Get the appropriate model handler
     model_handler = get_model_handler(model_name)

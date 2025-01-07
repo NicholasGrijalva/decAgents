@@ -1,3 +1,4 @@
+#todo update with recent deps
 accelerate==1.2.1
 aiohappyeyeballs==2.4.4
 aiohttp==3.11.11
