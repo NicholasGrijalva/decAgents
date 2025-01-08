@@ -3,7 +3,7 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 import os
 import base64
-from ..prompt import humor_prompt
+from ..ad_prompt import ad_prompt
 
 class AnthropicHandler(BaseModelHandler):
     def __init__(self):
@@ -13,10 +13,8 @@ class AnthropicHandler(BaseModelHandler):
             raise ValueError("ANTHROPIC_API_KEY not found in environment variables")
 
     def process_image(self, image_path: str):
-        # Initialize client with API key from .env
         client = Anthropic(api_key=self.api_key)
         
-        # Read and encode image as base64
         with open(image_path, "rb") as img:
             image_data = img.read()
             base64_image = base64.b64encode(image_data).decode('utf-8')
@@ -31,15 +29,36 @@ class AnthropicHandler(BaseModelHandler):
                         "type": "image",
                         "source": {
                             "type": "base64",
-                            "media_type": "image/jpeg",
+                            "media_type": self._get_media_type(image_path),
                             "data": base64_image
                         }
                     },
                     {
                         "type": "text",
-                        "text": humor_prompt
+                        "text": ad_prompt
                     }
                 ]
             }]
         )
-        return response.content[0].text
+        
+        # Ensure response is in correct JSON format
+        try:
+            # If response isn't already JSON, format it as JSON
+            import json
+            return json.dumps({
+                "image_description": response.content[0].text,
+                "choice": 1  # You might want to extract this from the response
+            })
+        except Exception as e:
+            raise ValueError(f"Failed to format response as JSON: {str(e)}")
+
+    def _get_media_type(self, image_path: str) -> str:
+        """Determine the correct media type based on file extension"""
+        ext = image_path.lower().split('.')[-1]
+        media_types = {
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'gif': 'image/gif'
+        }
+        return media_types.get(ext, 'image/jpeg')

@@ -9,12 +9,25 @@ def create_tables():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
+    #create consensus info. which has a limited lifespan.
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS consensus (
+            consensus_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            current_step INTEGER NOT NULL DEFAULT 0,
+            is_complete BOOLEAN NOT NULL DEFAULT FALSE,
+            UNIQUE(consensus_id)
+        )
+    ''')
+
+
     # Store information about images
     c.execute('''
         CREATE TABLE IF NOT EXISTS images (
             image_id INTEGER PRIMARY KEY AUTOINCREMENT,
             image_path TEXT UNIQUE NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            consensus_id INTEGER,
+            FOREIGN KEY (consensus_id) REFERENCES consensus (consensus_id)
         )
     ''')
     
@@ -29,18 +42,22 @@ def create_tables():
     
     # Store analysis results
     c.execute('''
-        CREATE TABLE IF NOT EXISTS analysis_results (
-            result_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            image_id INTEGER,
-            model_id INTEGER,
+        CREATE TABLE IF NOT EXISTS votes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id INTEGER NOT NULL,
+            image_id INTEGER NOT NULL,
+            consensus_id INTEGER NOT NULL,
+            step INTEGER NOT NULL,
+            choice INTEGER NOT NULL CHECK (choice IN (0, 1)),
             description TEXT NOT NULL,
-            humor_rating INTEGER CHECK (humor_rating >= 1 AND humor_rating <= 10),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (agent_id) REFERENCES models (model_id),
             FOREIGN KEY (image_id) REFERENCES images (image_id),
-            FOREIGN KEY (model_id) REFERENCES models (model_id),
-            UNIQUE (image_id, model_id)
+            FOREIGN KEY (consensus_id) REFERENCES consensus (consensus_id),
+            UNIQUE (agent_id, image_id, consensus_id)
         )
     ''')
+    
     
     conn.commit()
     conn.close()
@@ -49,105 +66,51 @@ def init_db():
     """Initialize database if it doesn't exist"""
     create_tables()
 
-def save_analysis(image_path: str, model_name: str, result_dict: dict):
-    """
-    Save analysis results to database
-    
-    Args:
-        image_path (str): Path to the analyzed image
-        model_name (str): Name of the model used for analysis
-        result_dict (dict): Dictionary containing 'image_description' and 'rating' keys
-    """
+
+def create_consensus() -> int:
+    """Create a new consensus round and return its ID"""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    
     try:
-        # Insert or get image
+        c.execute('''
+            INSERT INTO consensus (created_at, current_step, is_complete)
+            VALUES (CURRENT_TIMESTAMP, 0, FALSE)
+        ''')
+        consensus_id = c.lastrowid
+        conn.commit()
+        return consensus_id
+    finally:
+        conn.close()
+
+def cast_vote(image_path: str, model_name: str, consensus_id: int, step: int, 
+              choice: float, description: str) -> None:
+    """Cast a vote from a local model"""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    try:
+        # Get or create image record
         c.execute('INSERT OR IGNORE INTO images (image_path) VALUES (?)', (image_path,))
         c.execute('SELECT image_id FROM images WHERE image_path = ?', (image_path,))
         image_id = c.fetchone()[0]
         
-        # Insert or get model
+        # Get or create model record
         c.execute('INSERT OR IGNORE INTO models (model_name) VALUES (?)', (model_name,))
         c.execute('SELECT model_id FROM models WHERE model_name = ?', (model_name,))
         model_id = c.fetchone()[0]
         
-        # Save analysis result
+        # Insert vote
         c.execute('''
-            INSERT INTO analysis_results 
-            (image_id, model_id, description, humor_rating)
-            VALUES (?, ?, ?, ?)
-        ''', (image_id, model_id, result_dict['image_description'], result_dict['rating']))
+            INSERT INTO votes (agent_id, image_id, consensus_id, step, choice, description)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (model_id, image_id, consensus_id, step, choice, description))
         
         conn.commit()
-    except sqlite3.Error as e:
-        print(f"Database error: {e}")
-        conn.rollback()
     finally:
         conn.close()
 
-def get_image_analyses(image_path: str):
-    """
-    Retrieve all analyses for a specific image
-    
-    Args:
-        image_path (str): Path to the image
-    Returns:
-        list: List of dictionaries containing analysis results
-    """
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    
-    try:
-        c.execute('''
-            SELECT m.model_name, ar.description, ar.humor_rating, ar.created_at
-            FROM analysis_results ar
-            JOIN images i ON ar.image_id = i.image_id
-            JOIN models m ON ar.model_id = m.model_id
-            WHERE i.image_path = ?
-            ORDER BY ar.created_at DESC
-        ''', (image_path,))
-        
-        results = [{
-            'model': row[0],
-            'description': row[1],
-            'rating': row[2],
-            'timestamp': row[3]
-        } for row in c.fetchall()]
-        
-        return results
-    finally:
-        conn.close()
-
-def get_model_analyses(model_name: str, limit: int = 10):
-    """
-    Retrieve recent analyses from a specific model
-    
-    Args:
-        model_name (str): Name of the model
-        limit (int): Maximum number of results to return
-    Returns:
-        list: List of dictionaries containing analysis results
-    """
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    
-    try:
-        c.execute('''
-            SELECT i.image_path, ar.description, ar.humor_rating, ar.created_at
-            FROM analysis_results ar
-            JOIN images i ON ar.image_id = i.image_id
-            JOIN models m ON ar.model_id = m.model_id
-            WHERE m.model_name = ?
-            ORDER BY ar.created_at DESC
-            LIMIT ?
-        ''', (model_name, limit))
-        
-        return [{
-            'image_path': row[0],
-            'description': row[1],
-            'rating': row[2],
-            'timestamp': row[3]
-        } for row in c.fetchall()]
-    finally:
-        conn.close()
+def record_external_vote(external_model_name: str, image_path: str, consensus_id: int,
+                        step: int, choice: float, description: str) -> None:
+    """Record a vote received from an external model"""
+    # This is essentially the same as cast_vote, but might include additional 
+    # validation or logging for external sources
+    cast_vote(image_path, external_model_name, consensus_id, step, choice, description)

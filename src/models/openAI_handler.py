@@ -1,9 +1,9 @@
 from .base_handler import BaseModelHandler
 from openai import OpenAI
-from ..prompt import humor_prompt
+from ..ad_prompt import ad_prompt
 from dotenv import load_dotenv
 import os
-
+import json
 
 class ChatGPTHandler(BaseModelHandler):
     def __init__(self):
@@ -13,7 +13,6 @@ class ChatGPTHandler(BaseModelHandler):
             raise ValueError("OPENAI_API_KEY not found in environment variables")
         
     def process_image(self, image_path: str):
-        # One-shot implementation using GPT-4 Vision
         client = OpenAI()
         with open(image_path, "rb") as img:
             response = client.chat.completions.create(
@@ -21,9 +20,25 @@ class ChatGPTHandler(BaseModelHandler):
                 messages=[{
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": humor_prompt},
+                        {"type": "text", "text": ad_prompt},
                         {"type": "image_url", "image_url": {"url": img.read()}}
                     ]
                 }]
             )
-        return response.choices[0].message.content
+        
+        # Ensure response is in correct JSON format
+        try:
+            raw_response = response.choices[0].message.content
+            # If response isn't already JSON, try to parse it
+            try:
+                # Try parsing in case it's already JSON
+                json.loads(raw_response)
+                return raw_response
+            except json.JSONDecodeError:
+                # If not JSON, format it
+                return json.dumps({
+                    "image_description": raw_response,
+                    "choice": 1  # Default to 1 if not specified in response
+                })
+        except Exception as e:
+            raise ValueError(f"Failed to format response as JSON: {str(e)}")
