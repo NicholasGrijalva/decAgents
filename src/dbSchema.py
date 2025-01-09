@@ -93,10 +93,13 @@ def cast_vote(image_path: str, model_name: str, consensus_id: int, step: int,
         c.execute('SELECT image_id FROM images WHERE image_path = ?', (image_path,))
         image_id = c.fetchone()[0]
         
-        # Get or create model record
-        c.execute('INSERT OR IGNORE INTO models (model_name) VALUES (?)', (model_name,))
-        c.execute('SELECT model_id FROM models WHERE model_name = ?', (model_name,))
-        model_id = c.fetchone()[0]
+        # Create a unique agent name using timestamp
+        from datetime import datetime
+        unique_model_name = f"{model_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        # Always create a new model record with the unique name
+        c.execute('INSERT INTO models (model_name) VALUES (?)', (unique_model_name,))
+        model_id = c.lastrowid
         
         # Insert vote
         c.execute('''
